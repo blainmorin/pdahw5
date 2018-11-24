@@ -1,0 +1,85 @@
+---
+title: "HW#5"
+author: "Blain Morin"
+date: "November 23, 2018"
+output: pdf_document
+---
+
+
+```{r, echo = FALSE}
+
+### Load Libraries
+
+library(knitr)
+library(readr)
+library(MASS)
+library(dplyr)
+library(stargazer)
+
+```
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE}
+
+### Load data
+iod = read_csv("iodatadev.csv")
+
+### Filter out columns with more that 10% missing data
+iod.clean = Filter(function(x) mean(is.na(x)) < 0.1, iod)
+
+### Get complete cases
+iod.clean = iod.clean %>%
+  filter(complete.cases(.))
+
+### Filter out ids
+iod.clean = iod.clean %>%
+  select(-X1, -ID, -"..2", -"..2_1")
+
+```
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE}
+
+# ### Forward steps
+# forward = regsubsets(GFR~., data = iod.clean, nvmax=26, method="forward")
+# forward.summary = summary(forward)
+# forward.summary$rsq
+# forward.summary$
+
+set.seed(1)
+
+### Forward and backward step regression
+full = lm(GFR ~ ., iod.clean)
+base = lm(GFR ~ 1, iod.clean)
+forward = stepAIC(full, scope = list(upper=full,lower=base), direction = "both", trace = FALSE)
+summary.forward = summary(forward)
+rsquared.forward = summary.forward$r.squared
+
+
+set.seed(1)
+nsims = 1000
+
+r2boot.train = rep(NA, nsims)
+r2boot.test = rep(NA, nsims)
+
+for (i in 1:nsims) {
+  
+  train = sample_n(iod.clean, size = nrow(iod.clean), replace = TRUE)
+  test = anti_join(iod.clean, train)
+  mod = stepAIC(lm(GFR ~ ., data = train), direction = "both", trace = FALSE)
+  summary.mod = summary(mod)
+  r2boot.train[i] = summary.mod$r.squared
+  preds = predict(mod, test)
+  tss = sum((test$GFR - mean(test$GFR))^2)
+  ess = sum((test$GFR - preds)^2)
+  r2boot.test[i] = 1 - (ess/tss)
+  
+  
+}
+
+
+```
+
+```{r, echo = FALSE, results = 'asis'}
+
+stargazer(forward, backward)
+
+```
