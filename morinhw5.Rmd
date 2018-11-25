@@ -36,7 +36,7 @@ iod.clean = iod.clean %>%
 
 ### Filter out ids
 iod.clean = iod.clean %>%
-  select(-X1, -ID, -"..2", -"..2_1", -WEIGHT, -HEIGHT, -c.cys, -drds, -mayodonor, -rass1, -CSG, -gronigendonor, - ccpdonor, - c.scr)
+  select(-X1, -ID, -"..2", -"..2_1", -WEIGHT, -HEIGHT, -c.cys, -drds, -mayodonor, -rass1, -CSG, -gronigendonor, - ccpdonor, - c.scr, - mayo)
 
 ```
 
@@ -118,7 +118,7 @@ folds = 10
 
 test = createFolds(iod.clean$GFR, k = folds)
 
-cv.errors = matrix(NA, nrow = folds, ncol = ncol(iod.clean) - 2)
+cv.errors = matrix(NA, nrow = folds, ncol = ncol(iod.clean) - 1 )
 
 for (i in 1:folds) {
   
@@ -126,9 +126,9 @@ for (i in 1:folds) {
   testing = iod.clean[test[[i]], ]
   best.model = regsubsets(GFR ~ .,
                           data = training,
-                          nvmax = ncol(iod.clean) - 2)
+                          nvmax = ncol(iod.clean) )
   
-  for (j in 1:(ncol(iod.clean)-2)) {
+  for (j in 1:(ncol(iod.clean)-1)) {
     
     preds = predict.regsubsets(best.model, newdata = testing, id = j)
     MSE = mean((testing$GFR - preds)^2)
@@ -149,3 +149,11 @@ plot(mean.cv.errors,type='b')
 ```
 
 ## Ridge 
+
+
+```{r}
+
+
+
+
+```
