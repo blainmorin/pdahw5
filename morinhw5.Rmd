@@ -3,6 +3,8 @@ title: "HW#5"
 author: "Blain Morin"
 date: "November 23, 2018"
 output: pdf_document
+header-includes:
+- \usepackage{float}
 ---
 
 
@@ -17,6 +19,8 @@ library(leaps)
 library(dplyr)
 library(stargazer)
 library(caret)
+library(extrafont)
+library(glmnet)
 
 ```
 
@@ -102,6 +106,7 @@ est.test.r2 = rsquared.fulltest - ave.optimism
 
 ```{r, echo = FALSE, warning = TRUE, message = FALSE}
 
+### Function to get predictions for leap package
 predict.regsubsets=function(object,newdata,id,...){
   form=as.formula(object$call[[2]])
   mat=model.matrix(form,newdata)
@@ -143,17 +148,193 @@ for (i in 1:folds) {
 
 
 mean.cv.errors = apply(cv.errors, 2, mean)
-which.min(mean.cv.errors)
-plot(mean.cv.errors,type='b')
+
+step.plot.frame = data.frame(variables = seq(1:(ncol(iod.clean)-1)), error = mean.cv.errors)
+
+step.plot = step.plot.frame %>%
+  ggplot(aes(x = variables, y = mean.cv.errors)) +
+  geom_point() +
+  geom_line() +
+  theme_classic() +
+  theme(text=element_text(size=12,  family="CM Sans"))
+
+  
+```
+
+## Ridge
+
+```{r}
+
+set.seed(11)
+
+folds = 10
+
+### Create folds makes indexes the observations left out
+test = createFolds(iod.clean$GFR, k = folds)
+
+### Grid of lambdas to check
+grid=seq(1, .001, length=100)
+
+
+### Set up data
+
+x = model.matrix(GFR ~ . - 1, data = iod.clean)
+y = iod.clean$GFR
+
+
+### Initialize matrices for mse, r2train, r2test
+ridge.cv.errors = matrix(NA, nrow = folds, ncol = length(grid))
+ridge.r2.train = matrix(NA, nrow = folds, ncol = length(grid))
+ridge.r2.test = matrix(NA, nrow = folds, ncol = length(grid))
+
+
+### For each fold, make test and training x and y
+### For each lambda, calculate r2 and mse
+for (i in 1:folds) {
+  
+  trainingx = x[-test[[i]], ]
+  trainingy = y[-test[[i]]]
+  testingx = x[test[[i]], ]
+  testingy = y[test[[i]]]
+  
+  for (j in 1:length(grid)){
+    
+    best.model = glmnet(x = trainingx, y = trainingy, alpha = 0, lambda = grid)
+    
+    trainpreds = predict(best.model, newx = trainingx, s = grid[j])
+    preds = predict(best.model, newx = testingx, s = grid[j])
+    
+    
+    #R2 for training folds
+    train.tss = sum((trainingy - mean(trainingy))^2)
+    train.ess = sum((trainingy - trainpreds)^2)
+    r2train =  1 - (train.ess/train.tss)
+    ridge.r2.train[i,j] = r2train
+    
+    
+    #R2 for testing folds
+    test.tss = sum((testingy - mean(testingy))^2)
+    test.ess = sum((testingy - preds)^2)
+    r2test =  1 - (test.ess/test.tss)
+    ridge.r2.test[i,j] = r2test
+    
+    #MSE 
+    MSE = mean((preds - testingy)^2)
+    ridge.cv.errors[i, j] = MSE
+    
+  }
+  
+}
+
+
+### Get average Optimism for each lambda
+ridge.optimism = ridge.r2.train - ridge.r2.test
+est.ridge.optimism = apply(ridge.optimism, 2, mean)
+
+### Get average MSE for each lambda
+mean.ridge.errors = apply(ridge.cv.errors, 2, mean)
+
+ridge.plot.frame = data.frame(lambda = grid, error = mean.ridge.errors)
+
+ridge.plot.frame %>% ggplot(aes(x = lambda, y = error)) +
+  geom_point() +
+  geom_line() +
+  theme_classic() +
+  theme(text=element_text(size=12,  family="CM Sans"))
+
+### Get min lambda and its optimism
+ridge.plot.frame[which.min(ridge.plot.frame$error), ]
+est.ridge.optimism[which.min(ridge.plot.frame$error)]
+
+
 
 ```
 
-## Ridge 
-
+## Lasso
 
 ```{r}
 
 
+set.seed(11)
+
+folds = 10
+
+### Create folds makes indexes the observations left out
+test = createFolds(iod.clean$GFR, k = folds)
+
+### Grid of lambdas to check
+grid=seq(1, .001, length=100)
+
+
+### Set up data
+
+x = model.matrix(GFR ~ . - 1, data = iod.clean)
+y = iod.clean$GFR
+
+
+### Initialize matrices for mse, r2train, r2test
+lasso.cv.errors = matrix(NA, nrow = folds, ncol = length(grid))
+lasso.r2.train = matrix(NA, nrow = folds, ncol = length(grid))
+lasso.r2.test = matrix(NA, nrow = folds, ncol = length(grid))
+
+
+### For each fold, make test and training x and y
+### For each lambda, calculate r2 and mse
+for (i in 1:folds) {
+  
+  trainingx = x[-test[[i]], ]
+  trainingy = y[-test[[i]]]
+  testingx = x[test[[i]], ]
+  testingy = y[test[[i]]]
+  
+  for (j in 1:length(grid)){
+    
+    best.model = glmnet(x = trainingx, y = trainingy, alpha = 1, lambda = grid)
+    
+    trainpreds = predict(best.model, newx = trainingx, s = grid[j])
+    preds = predict(best.model, newx = testingx, s = grid[j])
+    
+    
+    #R2 for training folds
+    train.tss = sum((trainingy - mean(trainingy))^2)
+    train.ess = sum((trainingy - trainpreds)^2)
+    r2train =  1 - (train.ess/train.tss)
+    lasso.r2.train[i,j] = r2train
+    
+    
+    #R2 for testing folds
+    test.tss = sum((testingy - mean(testingy))^2)
+    test.ess = sum((testingy - preds)^2)
+    r2test =  1 - (test.ess/test.tss)
+    lasso.r2.test[i,j] = r2test
+    
+    #MSE 
+    MSE = mean((preds - testingy)^2)
+    lasso.cv.errors[i, j] = MSE
+    
+  }
+  
+}
+
+
+### Get average Optimism for each lambda
+lasso.optimism = lasso.r2.train - lasso.r2.test
+est.lasso.optimism = apply(lasso.optimism, 2, mean)
+
+### Get average MSE for each lambda
+mean.lasso.errors = apply(lasso.cv.errors, 2, mean)
+
+lasso.plot.frame = data.frame(lambda = grid, error = mean.lasso.errors)
+
+lasso.plot.frame %>% ggplot(aes(x = lambda, y = error)) +
+  geom_point() +
+  geom_line() +
+  theme_classic() +
+  theme(text=element_text(size=12,  family="CM Sans"))
+
+### Get min lambda and its optimism
+lasso.plot.frame[which.min(lasso.plot.frame$error), ]
+est.lasso.optimism[which.min(lasso.plot.frame$error)]
 
 
 ```
