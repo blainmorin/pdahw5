@@ -117,13 +117,15 @@ predict.regsubsets=function(object,newdata,id,...){
 
 ### Crossvalidate number of variables for step
 
-set.seed(11)
+set.seed(15)
 
 folds = 10
 
 test = createFolds(iod.clean$GFR, k = folds)
 
 cv.errors = matrix(NA, nrow = folds, ncol = ncol(iod.clean) - 1 )
+step.r2.train = matrix(NA, nrow = folds, ncol = ncol(iod.clean) - 1)
+step.r2.test = matrix(NA, nrow = folds, ncol = ncol(iod.clean) - 1)
 
 for (i in 1:folds) {
   
@@ -131,11 +133,30 @@ for (i in 1:folds) {
   testing = iod.clean[test[[i]], ]
   best.model = regsubsets(GFR ~ .,
                           data = training,
-                          nvmax = ncol(iod.clean) )
+                          nvmax = ncol(iod.clean),
+                          method = "seqrep")
   
   for (j in 1:(ncol(iod.clean)-1)) {
     
+    preds.training = predict.regsubsets(best.model, newdata = training, id = j)
     preds = predict.regsubsets(best.model, newdata = testing, id = j)
+    
+    
+    #R2 for training folds
+    train.tss = sum((training$GFR - mean(training$GFR))^2)
+    train.ess = sum((training$GFR - preds.training)^2)
+    r2train =  1 - (train.ess/train.tss)
+    step.r2.train[i,j] = r2train
+    
+    
+    #R2 for testing folds
+    test.tss = sum((testing$GFR - mean(testing$GFR))^2)
+    test.ess = sum((testing$GFR - preds)^2)
+    r2test =  1 - (test.ess/test.tss)
+    step.r2.test[i,j] = r2test
+    
+    
+    
     MSE = mean((testing$GFR - preds)^2)
     cv.errors[i, j] = MSE
     
@@ -157,6 +178,27 @@ step.plot = step.plot.frame %>%
   geom_line() +
   theme_classic() +
   theme(text=element_text(size=12,  family="CM Sans"))
+
+
+### Use best model on full data
+
+which.min(mean.cv.errors) ## 12 variables is best
+
+### Run models
+final.step = regsubsets(GFR ~ .,
+                          data = iod.clean,
+                          nvmax = ncol(iod.clean),
+                          method = "seqrep")
+
+### Extract 12 variable model's rsquared
+final.step.r2 = summary(final.step)$rsq[which.min(mean.cv.errors)]
+
+### Adjust the r2 by the optimism
+step.optimisms = step.r2.train - step.r2.test
+mean.step.optimisms = apply(step.optimisms, 2, mean)
+
+### Adjusted r2
+step.adj.r2 = final.step.r2 - mean.step.optimisms[which.min(mean.cv.errors)]
 
   
 ```
@@ -236,7 +278,7 @@ mean.ridge.errors = apply(ridge.cv.errors, 2, mean)
 
 ridge.plot.frame = data.frame(lambda = grid, error = mean.ridge.errors)
 
-ridge.plot.frame %>% ggplot(aes(x = lambda, y = error)) +
+ridge.plot = ridge.plot.frame %>% ggplot(aes(x = lambda, y = error)) +
   geom_point() +
   geom_line() +
   theme_classic() +
@@ -244,9 +286,24 @@ ridge.plot.frame %>% ggplot(aes(x = lambda, y = error)) +
 
 ### Get min lambda and its optimism
 ridge.plot.frame[which.min(ridge.plot.frame$error), ]
-est.ridge.optimism[which.min(ridge.plot.frame$error)]
+best.ridge.opt = est.ridge.optimism[which.min(ridge.plot.frame$error)]
 
 
+### Fit model with best lambda
+final.ridge = glmnet(x = x, y = y, alpha = 0, lambda = grid[which.min(ridge.plot.frame$error)])
+
+### Get final model preds
+final.ridge.preds = predict(final.ridge, newx = x)
+
+
+### Get final model r2
+final.ridge.tss = sum((y - mean(y))^2)
+final.ridge.ess = sum((y - final.ridge.preds)^2)
+final.ridge.r2 =  1 - (final.ridge.ess/final.ridge.tss)
+
+
+### Get adj final model r2
+final.ridge.adj.r2 = final.ridge.r2 - best.ridge.opt
 
 ```
 
@@ -334,7 +391,23 @@ lasso.plot.frame %>% ggplot(aes(x = lambda, y = error)) +
 
 ### Get min lambda and its optimism
 lasso.plot.frame[which.min(lasso.plot.frame$error), ]
-est.lasso.optimism[which.min(lasso.plot.frame$error)]
+best.lasso.opt = est.lasso.optimism[which.min(lasso.plot.frame$error)]
+
+### Fit model with best lambda
+final.lasso = glmnet(x = x, y = y, alpha = 1, lambda = grid[which.min(lasso.plot.frame$error)])
+
+### Get final model preds
+final.lasso.preds = predict(final.lasso, newx = x)
+
+
+### Get final model r2
+final.lasso.tss = sum((y - mean(y))^2)
+final.lasso.ess = sum((y - final.lasso.preds)^2)
+final.lasso.r2 =  1 - (final.lasso.ess/final.ridge.tss)
+
+
+### Get adj final model r2
+final.lasso.adj.r2 = final.lasso.r2 - best.lasso.opt
 
 
 ```
