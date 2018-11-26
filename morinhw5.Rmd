@@ -411,3 +411,11 @@ final.lasso.adj.r2 = final.lasso.r2 - best.lasso.opt
 
 
 ```
+
+
+```{r}
+
+forkable = data.frame(step = step.adj.r2, ridge = final.ridge.adj.r2, lasso = final.lasso.adj.r2)
+kable(forkable)
+
+```
