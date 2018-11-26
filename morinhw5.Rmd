@@ -169,7 +169,7 @@ set.seed(11)
 
 folds = 10
 
-### Create folds makes indexes the observations left out
+### Create folds indexes for the observations left out
 test = createFolds(iod.clean$GFR, k = folds)
 
 ### Grid of lambdas to check
@@ -259,7 +259,7 @@ set.seed(11)
 
 folds = 10
 
-### Create folds makes indexes the observations left out
+### Create folds makes indexes for left out observations
 test = createFolds(iod.clean$GFR, k = folds)
 
 ### Grid of lambdas to check
